@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-// src/main.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NestFactory } from '@nestjs/core';
@@ -46,7 +45,7 @@ async function createNestServer(): Promise<Express.Application> {
     }),
   );
 
-  // 5. Rate Limiting
+  // 5. Rate Limiting with custom keyGenerator
   const rlConfig = configService.get<{
     windowMs: number;
     max: number;
@@ -56,28 +55,40 @@ async function createNestServer(): Promise<Express.Application> {
       windowMs: rlConfig?.windowMs,
       max: rlConfig?.max,
       message: 'Too many requests, please try again later.',
+      keyGenerator: (req: Request) => {
+        // 1) Try X-Forwarded-For header (comma-separated list)
+        const xff = req.headers['x-forwarded-for'];
+        if (typeof xff === 'string' && xff.length) {
+          return xff.split(',')[0].trim();
+        }
+        // 2) Fallback to req.ip
+        if (req.ip) {
+          return req.ip;
+        }
+        // 3) Final fallback to socket remoteAddress
+        return req.socket.remoteAddress ?? 'unknown';
+      },
     }),
   );
 
   // 6. Global Exception Filter
-  const httpAdapterHost = app.get(HttpAdapterHost);
+  const httpAdapterHost = app.get<HttpAdapterHost>(HttpAdapterHost);
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
 
   // 7. Express-specific settings
   const expressApp = httpAdapterHost.httpAdapter.getInstance();
-  expressApp.enable('trust proxy');
+  expressApp.enable('trust proxy', true);
   expressApp.set('x-powered-by', false);
 
   // 8. Initialize the app (no listen for serverless)
   await app.init();
-
   return expressApp;
 }
 
 // Cache the server across lambda invocations
-let cachedServer: import('express').Express;
+let server: import('express').Express;
 
 export default serverless(async (req: Request, res: Response) => {
-  cachedServer = cachedServer ?? (await createNestServer());
-  return cachedServer(req, res);
+  server = server ?? (await createNestServer());
+  return server(req, res);
 });
