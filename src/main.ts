@@ -63,7 +63,7 @@ async function bootstrap() {
   expressInstance.enable('trust proxy');
   expressInstance.set('x-powered-by', false);
 
-  await app.listen(port!);
+  await app.listen(port);
   app.enableCors();
   Logger.log(`Server running on http://localhost:${port}`, 'Bootstrap');
 }
