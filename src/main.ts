@@ -1,26 +1,27 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // src/main.ts
-import { NestFactory, HttpAdapterHost } from '@nestjs/core';
-import {
-  ValidationPipe,
-  Logger,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost } from '@nestjs/core';
+import { ValidationPipe, UnprocessableEntityException } from '@nestjs/common';
 import { AppModule } from './app.module';
-import * as helmet from 'helmet';
-import * as rateLimit from 'express-rate-limit';
-import * as cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cors from 'cors';
+import serverless from 'serverless-http';
 import { ConfigService } from '@nestjs/config';
 import { AllExceptionsFilter } from './utils/all-exceptions.filter';
+import type { Request, Response } from 'express';
 
-async function bootstrap() {
+async function createNestServer(): Promise<Express.Application> {
+  // 1. Create Nest application
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  const configService = app.get(ConfigService);
-  const port = configService.get<number>('port') || 3000;
 
-  // 1) Global validation pipe for DTOs (reject unknown and auto-transform)
+  // 2. Global Validation Pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -30,41 +31,53 @@ async function bootstrap() {
     }),
   );
 
-  // 2) Security headers
-  app.use(helmet.default());
+  // 3. Security Headers
+  app.use(helmet());
 
-  // 3) CORS (allow only a whitelist of origins in production)
+  // 4. CORS Configuration
+  const configService = app.get(ConfigService);
   app.use(
     cors({
       origin:
-        configService.get('NODE_ENV') === 'development'
+        configService.get<string>('NODE_ENV') === 'development'
           ? true
           : ['https://your-production-domain.com'],
       credentials: true,
     }),
   );
 
-  // 4) Rate limiting
-  const rateLimitConfig = configService.get('rateLimit');
+  // 5. Rate Limiting
+  const rlConfig = configService.get<{
+    windowMs: number;
+    max: number;
+  }>('rateLimit');
   app.use(
-    rateLimit.default({
-      windowMs: rateLimitConfig.windowMs,
-      max: rateLimitConfig.max,
+    rateLimit({
+      windowMs: rlConfig?.windowMs,
+      max: rlConfig?.max,
       message: 'Too many requests, please try again later.',
     }),
   );
 
-  // 5) Global exception filter (hide stack traces in production)
-  const httpAdapter = app.get(HttpAdapterHost);
-  app.useGlobalFilters(new AllExceptionsFilter(httpAdapter));
+  // 6. Global Exception Filter
+  const httpAdapterHost = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
 
-  // 6) (Optional) Disable “x-powered-by” header and enable trust proxy
-  const expressInstance = httpAdapter.httpAdapter.getInstance();
-  expressInstance.enable('trust proxy');
-  expressInstance.set('x-powered-by', false);
+  // 7. Express-specific settings
+  const expressApp = httpAdapterHost.httpAdapter.getInstance();
+  expressApp.enable('trust proxy');
+  expressApp.set('x-powered-by', false);
 
-  await app.listen(port);
-  app.enableCors();
-  Logger.log(`Server running on http://localhost:${port}`, 'Bootstrap');
+  // 8. Initialize the app (no listen for serverless)
+  await app.init();
+
+  return expressApp;
 }
-bootstrap();
+
+// Cache the server across lambda invocations
+let cachedServer: import('express').Express;
+
+export default serverless(async (req: Request, res: Response) => {
+  cachedServer = cachedServer ?? (await createNestServer());
+  return cachedServer(req, res);
+});
