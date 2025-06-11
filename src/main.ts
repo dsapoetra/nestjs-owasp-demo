@@ -18,7 +18,7 @@ import { AllExceptionsFilter } from './utils/all-exceptions.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('port');
+  const port = configService.get<number>('port') || 3000;
 
   // 1) Global validation pipe for DTOs (reject unknown and auto-transform)
   app.useGlobalPipes(
@@ -64,6 +64,7 @@ async function bootstrap() {
   expressInstance.set('x-powered-by', false);
 
   await app.listen(port!);
+  app.enableCors();
   Logger.log(`Server running on http://localhost:${port}`, 'Bootstrap');
 }
 bootstrap();
