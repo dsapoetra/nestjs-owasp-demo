@@ -1,60 +1,48 @@
-// src/migrations/run-migrations.ts
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import 'dotenv/config'; // 1) load .env into process.env
+import { Pool } from 'pg';
+import { readdirSync, readFileSync } from 'fs';
+import { join, resolve } from 'path';
 
-import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
-import { createPool, Pool } from 'mysql2/promise';
-import * as dotenv from 'dotenv';
-
-// 1. Load environment variables from .env
-dotenv.config();
-
-async function run() {
-  // 2. Read MySQL connection info from process.env
-  const { MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE } =
-    process.env;
-
-  if (!MYSQL_HOST || !MYSQL_PORT || !MYSQL_USER || !MYSQL_DATABASE) {
-    console.error('❌ Missing required MYSQL_* environment variables.');
+async function runMigrations() {
+  // 2) Create a pool from DATABASE_URL
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error('❌  DATABASE_URL is not defined in environment.');
     process.exit(1);
   }
 
-  // 3. Create a connection pool
-  const pool: Pool = createPool({
-    host: MYSQL_HOST,
-    port: parseInt(MYSQL_PORT, 10),
-    user: MYSQL_USER,
-    password: MYSQL_PASSWORD || undefined,
-    database: MYSQL_DATABASE,
-    waitForConnections: true,
-    connectionLimit: 5,
-    queueLimit: 0,
-    multipleStatements: true, // allows multiple statements per query
+  const pool = new Pool({
+    connectionString,
+    ssl:
+      process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
   });
 
   try {
-    console.log('🔄 Running migrations...');
-
-    // 4. Locate the migrations directory
-    const migrationsDir = join(__dirname, '../../migrations');
+    // 3) Locate the migrations directory
+    const migrationsDir = resolve(__dirname);
     const files = readdirSync(migrationsDir)
-      .filter((fn) => fn.endsWith('.sql'))
-      .sort(); // ensure ascending lex order: 001-..., 002-...
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
 
-    for (const file of files) {
-      const filePath = join(migrationsDir, file);
-      console.log(`→ Applying ${file}...`);
-
-      // 5. Read the SQL file’s contents
-      const sql = readFileSync(filePath, 'utf-8');
-
-      // 6. Execute the SQL (multipleStatements: true allows all commands in one go)
-      await pool.query(sql);
-
-      console.log(`✅ ${file} applied.`);
+    if (files.length === 0) {
+      console.log('⚠️  No .sql files found in', migrationsDir);
+      return;
     }
 
-    console.log('🎉 All migrations applied successfully.');
-    process.exit(0);
+    // 4) Execute each SQL file in order
+    for (const file of files) {
+      const filePath = join(migrationsDir, file);
+      const sql = readFileSync(filePath, 'utf8');
+      console.log(`⏳ Running migration ${file}...`);
+      await pool.query(sql);
+      console.log(`✅  Migration ${file} applied.`);
+    }
+    console.log('🎉 All migrations completed successfully.');
   } catch (err) {
     console.error('❌ Migration failed:', err);
     process.exit(1);
@@ -63,4 +51,4 @@ async function run() {
   }
 }
 
-run();
+runMigrations();
