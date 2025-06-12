@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
+
 import { InsecureDb } from './common/insecure-db.service';
 
-// OWASP modules
+// → Import all your OWASP feature modules here:
 import { InjectionModule } from './A1_injection/injection.module';
 import { BrokenAuthModule } from './A2_broken-auth/broken-auth.module';
 import { SensitiveDataModule } from './A3_sensitive-data/sensitive-data.module';
@@ -20,11 +20,14 @@ import { LoggingModule } from './A10_logging/logging.module';
 
 @Module({
   imports: [
+    // 1) Make ConfigModule global, load + validate .env
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
       validationSchema,
     }),
+
+    // 2) All your feature modules
     InjectionModule,
     BrokenAuthModule,
     SensitiveDataModule,
@@ -36,6 +39,8 @@ import { LoggingModule } from './A10_logging/logging.module';
     VulnerableComponentsModule,
     LoggingModule,
   ],
+  // 3) Register your InsecureDb so ConfigService is injected properly
   providers: [InsecureDb],
+  exports: [InsecureDb],
 })
 export class AppModule {}

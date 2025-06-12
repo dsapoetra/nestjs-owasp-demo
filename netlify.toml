@@ -1,0 +1,29 @@
+# netlify.toml
+
+[build]
+  command   = "npm run build"
+  functions = "netlify/functions"
+  publish   = "public"   # <— use "public" or any folder you actually have for static assets
+
+[dev]
+  functions = "netlify/functions"
+  publish   = "public"
+
+[functions.server]
+  external_node_modules = [
+    "@nestjs/websockets",
+    "@nestjs/platform-socket.io",
+    "@nestjs/microservices",
+    "@grpc/grpc-js",
+    "@grpc/proto-loader",
+    "kafkajs",
+    "mqtt",
+    "nats",
+    "ioredis",
+    "amqplib"
+  ]
+
+[[redirects]]
+  from = "/*"
+  to   = "/.netlify/functions/server/:splat"
+  status = 200

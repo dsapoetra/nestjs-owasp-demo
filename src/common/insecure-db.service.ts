@@ -11,17 +11,21 @@ export class InsecureDb implements OnModuleDestroy {
   private readonly logger = new Logger(InsecureDb.name);
 
   constructor(private readonly configService: ConfigService) {
-    const mysqlConfig = this.configService.get('mysql');
+    // read each MYSQL_* var directly
     const poolOptions: PoolOptions = {
-      host: mysqlConfig.host,
-      port: mysqlConfig.port,
-      user: mysqlConfig.user,
-      password: mysqlConfig.password,
-      database: mysqlConfig.database,
+      host: this.configService.get<string>('MYSQL_HOST', 'localhost'),
+      port: this.configService.get<number>('MYSQL_PORT', 3306),
+      user: this.configService.get<string>('MYSQL_USER', 'dsapoetra'),
+      password: this.configService.get<string>(
+        'MYSQL_PASSWORD',
+        'V3lvetrevolver.',
+      ),
+      database: this.configService.get<string>('MYSQL_DATABASE', 'owasp_demo'),
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
     };
+
     this.pool = createPool(poolOptions);
   }
 
