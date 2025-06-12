@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 // src/A9_vulnerable-components/vulnerable-components.service.ts
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 
 import { Injectable } from '@nestjs/common';
 
@@ -12,13 +13,12 @@ export class VulnerableComponentsService {
    * causing global prototype pollution.
    */
   merge(payload: any): any {
-    // Directly set payload.__proto__ onto Object.prototype
     if (payload && typeof payload.__proto__ === 'object') {
-      // This line pollutes the global prototype
+      // Pollute the global Object prototype
       Object.setPrototypeOf(Object.prototype, payload.__proto__);
     }
 
-    // Return some default object to show merge did not alter its own props
+    // Return a fresh object that has its own isAdmin:false
     return { isAdmin: false, name: 'guest' };
   }
 }
