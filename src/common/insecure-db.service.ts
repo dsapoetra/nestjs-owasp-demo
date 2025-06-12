@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* src/common/insecure-db.service.ts */
+// src/common/insecure-db.service.ts
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
-import { URL } from 'url';
 
 @Injectable()
 export class InsecureDb implements OnModuleDestroy {
@@ -13,24 +12,18 @@ export class InsecureDb implements OnModuleDestroy {
   private readonly logger = new Logger(InsecureDb.name);
 
   constructor(private readonly configService: ConfigService) {
-    // parse DATABASE_URL
-    const dbUrlString = this.configService.get<string>('databaseUrl');
-    if (!dbUrlString) {
-      throw new Error(
-        'DATABASE_URL is not set in environment or configuration',
-      );
+    // Read the full connection string
+    const connectionString = this.configService.get<string>('DATABASE_URL');
+    if (!connectionString) {
+      throw new Error('DATABASE_URL must be set');
     }
-    const dbUrl = new URL(dbUrlString);
+
     this.pool = new Pool({
-      host: dbUrl.hostname,
-      port: parseInt(dbUrl.port, 10) || 5432,
-      user: dbUrl.username,
-      password: dbUrl.password,
-      database: dbUrl.pathname.slice(1), // strip leading "/"
-      ssl:
-        this.configService.get<string>('nodeEnv') === 'production'
-          ? { rejectUnauthorized: false }
-          : false,
+      connectionString,
+      // ALWAYS use SSL on Heroku; rejectUnauthorized:false permits self-signed cert
+      ssl: {
+        rejectUnauthorized: false,
+      },
       max: 10,
     });
   }
